@@ -16,6 +16,11 @@ import numpy as np
 
 ICMP_ECHO_REQUEST = 8
 
+
+
+#variable to collect all RTTs
+collected_rtt = []
+
 #ADDTN
 all_rtt = []
 
@@ -56,17 +61,49 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
 		timeReceived = time.time()
 		recPacket, addr = mySocket.recvfrom(1024)
 
-		'''TODO'''
-		# Fill in start
+		#NOTE BEGIN LOGAN'S ADDITION END#NOTE
+
+		#check to ensure the length of the packet coming in is correct
+		#packet size should be 20+8
+		if(len(recPacket)<28):
+			return "Packet too short."
+		
+		#extract ICMP header
+		icmp_header = recPacket[20:28]
+		icmp_type, icmp_code, icmp_checksum, packetID, sequence = struct.unpack("bbHHh", icmp_header)
 
 
-		# Fetch the ICMP header from the IP packet
-		'''TODO'''
-		# Fill in end
-
+		# Validate the ICMP Response 
+		if(icmp_type != 0):
+			# Interpret ICMP Error Code
+			if icmp_type == 3:
+				if icmp_code == 0:
+					return "Destination Network Unreachable"
+				elif icmp_code == 1:
+					return "Destination Host Unreachable"
+				else:
+					return f"Destination Unreachable, code {icmp_code}"
+		elif packetID != ID:
+			return "Packet ID does not match, ignoring."
+		
+		# Ensure the packet has enough bytes for a timestamp
+		if len(recPacket) < 28 + struct.calcsize("d"):
+			return "Received packet does not contain a valid timestamp"
+		
+		# Extract the timestamp and compute RTT (in ms)
+		timeSent = struct.unpack("d", recPacket[28:28 + struct.calcsize("d")])[0]  # Extracting the timestamp
+		rtt = (timeReceived - timeSent) * 1000  # Computing RTT & converting to ms
+		
+		# Ensure time elasped doesn't cause timeout
 		timeLeft = timeLeft - howLongInSelect
 		if timeLeft <= 0:
-			return "Request timed out."
+			return "Request timed out when receiving."
+		
+		# Update RTTs (total, min, max)
+		collected_rtt.append(rtt)
+		
+		# Return message containing rtt
+		return f"Reply from {destAddr}: time={rtt}ms"
 
 def sendOnePing(mySocket, destAddr, ID):
 	# Header is type (8), code (8), checksum (16), id (16), sequence (16)
@@ -110,9 +147,20 @@ def ping(host, timeout=1):
 	print("Pinging " + dest + " using Python:")
 	print("")
 
+	#variable to collect total of tallies
+	ping_tally = 0
+
 	# Send ping requests to a server separated by approximately one second
 	while True:
 		delay = doOnePing(dest, timeout)
+		ping_tally+=1
 		print(delay)
 		time.sleep(1)  # one second
 	return delay
+
+
+#having difficulty running this with admin capabilities in a jupyter notebook.
+#attempting to make this script executable from CL
+if __name__ == "__main__":
+
+	ping("127.0.0.1")
