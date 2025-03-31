@@ -8,11 +8,9 @@ A '#NOTE BEGIN/END LOGAN'S ADDITION END#NOTE' is added at the program at my adde
 
 from socket import *
 import os
-import sys
 import struct
 import time
 import select
-import numpy as np
 
 ICMP_ECHO_REQUEST = 8
 
@@ -48,7 +46,7 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
 		howLongInSelect = (time.time() - startedSelect)
 
 		if whatReady[0] == []:  # Timeout
-			return "Request timed out."
+			return None, "Request timed out."
 
 		timeReceived = time.time()
 		recPacket, addr = mySocket.recvfrom(1024)
@@ -58,7 +56,7 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
 		#check to ensure the length of the packet coming in is correct
 		#packet size should be 20+8
 		if(len(recPacket)<28):
-			return "Packet too short."
+			return None, "Packet too short."
 		
 		#extract ICMP header
 		icmp_header = recPacket[20:28]
@@ -70,17 +68,17 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
 			# Interpret ICMP Error Code
 			if icmp_type == 3:
 				if icmp_code == 0:
-					return "Destination Network Unreachable"
+					return None, "Destination Network Unreachable"
 				elif icmp_code == 1:
-					return "Destination Host Unreachable"
+					return None, "Destination Host Unreachable"
 				else:
-					return f"Destination Unreachable, code {icmp_code}"
+					return None, f"Destination Unreachable, code {icmp_code}"
 		elif packetID != ID:
-			return "Packet ID does not match, ignoring."
+			return None, "Packet ID does not match, ignoring."
 		
 		# Ensure the packet has enough bytes for a timestamp
 		if len(recPacket) < 28 + struct.calcsize("d"):
-			return "Received packet does not contain a valid timestamp"
+			return None, "Received packet does not contain a valid timestamp"
 		
 		# Extract the timestamp and compute RTT (in ms)
 		timeSent = struct.unpack("d", recPacket[28:28 + struct.calcsize("d")])[0]  # Extracting the timestamp
@@ -89,7 +87,7 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
 		# Ensure time elasped doesn't cause timeout
 		timeLeft = timeLeft - howLongInSelect
 		if timeLeft <= 0:
-			return "Request timed out when receiving."
+			return rtt, "Request timed out when receiving."
 		
 		#NOTE BEGIN LOGAN'S ADDITION END#NOTE
 		# Return message containing rtt
@@ -125,10 +123,13 @@ def doOnePing(destAddr, timeout):
 	myID = os.getpid() & 0xFFFF  # Return the current process ID
 
 	sendOnePing(mySocket, destAddr, myID)
-	delay = receiveOnePing(mySocket, myID, timeout, destAddr)
+
+	#NOTE BEGIN LOGAN'S ADDITION END#NOTE
+	rtt, delay = receiveOnePing(mySocket, myID, timeout, destAddr)
 
 	mySocket.close()
-	return delay
+	return rtt, delay
+	#NOTE END LOGAN'S ADDITION END#NOTE
 
 def ping(
 	host	:	str	=	"127.0.0.1", 
@@ -185,9 +186,9 @@ def ping(
 if __name__ == "__main__":
 
 	ping_kwargs = {
-		'host'	:	"127.0.0.1",
-		'timeout':	1,
-		'num_pings':	10
+		'host'		:	"8.8.8.8",
+		'timeout'	:	3,
+		'num_pings'	:	10
 	}
 
 ping(**ping_kwargs)
