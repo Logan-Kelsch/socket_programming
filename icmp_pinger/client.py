@@ -16,7 +16,7 @@ import numpy as np
 
 ICMP_ECHO_REQUEST = 8
 
-
+num_pings = 0
 
 #variable to collect all RTTs
 collected_rtt = []
@@ -140,7 +140,11 @@ def doOnePing(destAddr, timeout):
 	mySocket.close()
 	return delay
 
-def ping(host, timeout=1):
+def ping(
+	host	:	str	=	"127.0.0.1", 
+	num_pings:	int	=	10000,
+	timeout	:	float	=	1
+):
 	# timeout=1 means: If one second goes by without a reply from the server,
 	# the client assumes that either the client's ping or the server's pong is lost
 	dest = gethostbyname(host)
@@ -151,11 +155,30 @@ def ping(host, timeout=1):
 	ping_tally = 0
 
 	# Send ping requests to a server separated by approximately one second
-	while True:
+	for i in range(num_pings):
 		delay = doOnePing(dest, timeout)
 		ping_tally+=1
 		print(delay)
 		time.sleep(1)  # one second
+
+   	print(f"Packet Loss: {round(((ping_tally-len(rtt_list))/ping_tally) * 100, 2)}%")
+	
+	if len(rtt_list) == 0: 
+		return delay  # Avoid dividing by 0 errors
+	
+	print(f"Average RTT: {sum(rtt_list)/len(rtt_list)} ms")
+	print(f"Max RTT: {max(rtt_list)} ms")
+	print(f"Min RTT: {min(rtt_list)} ms")
+	print(f"Total RTT for {len(rtt_list)} pings: {sum(rtt_list)} ms")
+	
+	if len(rtt_list) > 1:
+		#collect difference for each rtt
+		jitters = [abs(rtt_list[i] - rtt_list[i-1]) for i in range(1, len(rtt_list))]
+		average_jitter = sum(jitters) / len(jitters)
+	else: 
+		average_jitter = 0  # Less than 2 pings
+	print(f"Jitter: {average_jitter} ms")
+	
 	return delay
 
 
@@ -163,4 +186,10 @@ def ping(host, timeout=1):
 #attempting to make this script executable from CL
 if __name__ == "__main__":
 
-	ping("127.0.0.1")
+	ping_kwargs = {
+		'host'	:	"127.0.0.1",
+		'timeout':	1,
+		'num_pings':	10000
+	}
+
+ping(**ping_kwargs)
