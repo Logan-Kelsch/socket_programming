@@ -16,14 +16,6 @@ import numpy as np
 
 ICMP_ECHO_REQUEST = 8
 
-num_pings = 0
-
-#variable to collect all RTTs
-collected_rtt = []
-
-#ADDTN
-all_rtt = []
-
 def checksum(string):
 	csum = 0
 	countTo = (len(string) // 2) * 2
@@ -99,34 +91,32 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
 		if timeLeft <= 0:
 			return "Request timed out when receiving."
 		
-		# Update RTTs (total, min, max)
-		collected_rtt.append(rtt)
-		
+		#NOTE BEGIN LOGAN'S ADDITION END#NOTE
 		# Return message containing rtt
-		return f"Reply from {destAddr}: time={rtt}ms"
+		return rtt, f"Reply from {destAddr}: time={rtt}ms"
+		#NOTE END LOGAN'S ADDITION END#NOTE
 
 def sendOnePing(mySocket, destAddr, ID):
 	# Header is type (8), code (8), checksum (16), id (16), sequence (16)
 	myChecksum = 0
 
-	# Make a dummy header with a 0 checksum
+	#NOTE BEGIN LOGAN'S ADDITION END#NOTE
 	# struct -- Interpret strings as packed binary data
 	header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, 1)
 	data = struct.pack("d", time.time())
+	#NOTE END LOGAN'S ADDITION END#NOTE
 
 	# Calculate the checksum on the data and the dummy header.
 	myChecksum = checksum(str(header + data))
 
-	# Get the right checksum, and put in the header
-	if sys.platform == 'darwin':
-		# Convert 16-bit integers from host to network byte order
-		myChecksum = htons(myChecksum) & 0xffff
-	else:
-		myChecksum = htons(myChecksum)
+	#NOTE BEGIN LOGAN'S ADDITION END#NOTE
+	myChecksum = htons(myChecksum)
+	
 
 	header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, 1)
 	packet = header + data
 	mySocket.sendto(packet, (destAddr, 1))  # AF_INET address must be tuple, not str
+	#NOTE END LOGAN'S ADDITION END#NOTE
 
 def doOnePing(destAddr, timeout):
 	icmp = getprotobyname("icmp")
@@ -151,36 +141,44 @@ def ping(
 	print("Pinging " + dest + " using Python:")
 	print("")
 
+	#NOTE BEGIN LOGAN'S ADDITION END#NOTE
+
 	#variable to collect total of tallies
 	ping_tally = 0
 
+	#variable to collect all RTTs
+	collected_rtt = []
+
 	# Send ping requests to a server separated by approximately one second
 	for i in range(num_pings):
-		delay = doOnePing(dest, timeout)
+		rtt, delay = doOnePing(dest, timeout)
 		ping_tally+=1
+		collected_rtt.append(rtt)
 		print(delay)
-		time.sleep(1)  # one second
+		time.sleep(0.5)  # one second
 
-   	print(f"Packet Loss: {round(((ping_tally-len(rtt_list))/ping_tally) * 100, 2)}%")
-	
-	if len(rtt_list) == 0: 
-		return delay  # Avoid dividing by 0 errors
-	
-	print(f"Average RTT: {sum(rtt_list)/len(rtt_list)} ms")
-	print(f"Max RTT: {max(rtt_list)} ms")
-	print(f"Min RTT: {min(rtt_list)} ms")
-	print(f"Total RTT for {len(rtt_list)} pings: {sum(rtt_list)} ms")
-	
-	if len(rtt_list) > 1:
-		#collect difference for each rtt
-		jitters = [abs(rtt_list[i] - rtt_list[i-1]) for i in range(1, len(rtt_list))]
-		average_jitter = sum(jitters) / len(jitters)
-	else: 
-		average_jitter = 0  # Less than 2 pings
-	print(f"Jitter: {average_jitter} ms")
-	
+	#cannot collect sufficient data with less than 2 pings. output nothing
+	if(ping_tally < 2):
+		raise ValueError(f"Insufficient data can be collected with {ping_tally} pings.")
+
+	#collect jitter information
+	tot_jit = 0
+	for i in range(1, len(collected_rtt)):
+		#collect differences in each rtt
+		tot_jit+=abs(collected_rtt[i-1]-collected_rtt[i])
+
+	print(f"\nAVG RTT: {round(sum(collected_rtt)/len(collected_rtt), 4)} ms")
+	print(f"TOT RTT: {round(sum(collected_rtt), 4)} ms ({len(collected_rtt)} RTTs)")
+	print(f"MAX RTT: {round(max(collected_rtt), 4)} ms")
+	print(f"MIN RTT: {round(min(collected_rtt), 4)} ms")
+	print(f"LOSS: {round(((ping_tally-len(collected_rtt))/ping_tally) * 100, 4)}%")
+	print(f"JITTER: {round( tot_jit / (len(collected_rtt)-1) , 4)} ms")
+
+	#NOTE END LOGAN'S ADDITION END#NOTE
+
 	return delay
 
+#NOTE BEGIN LOGAN'S ADDITION END#NOTE
 
 #having difficulty running this with admin capabilities in a jupyter notebook.
 #attempting to make this script executable from CL
@@ -189,7 +187,9 @@ if __name__ == "__main__":
 	ping_kwargs = {
 		'host'	:	"127.0.0.1",
 		'timeout':	1,
-		'num_pings':	10000
+		'num_pings':	10
 	}
 
 ping(**ping_kwargs)
+
+#NOTE END LOGAN'S ADDITION END#NOTE
