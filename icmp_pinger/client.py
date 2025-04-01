@@ -1,6 +1,6 @@
 '''
 Program 1 - Pinger assignment - COSC370
-Logan Kelsch - 3/9/2025
+Logan Kelsch - 3/9/2025 - 3/17/2025
 The skeleton of this file was NOT coded by me. The skeleton of this file was derived from
 the student resource section of this book, under 'Python 3 Socket Programming Assignment'.
 A '#NOTE BEGIN/END LOGAN'S ADDITION END#NOTE' is added at the program at my added locations.
@@ -11,16 +11,21 @@ import os
 import struct
 import time
 import select
+import sys
 
 ICMP_ECHO_REQUEST = 8
 
 def checksum(string):
+
+	if( isinstance(string, str)):
+		string.encode()
+
 	csum = 0
 	countTo = (len(string) // 2) * 2
 	count = 0
 
 	while count < countTo:
-		thisVal = ord(string[count + 1]) * 256 + ord(string[count])
+		thisVal = string[count + 1] * 256 + string[count]
 		csum = csum + thisVal
 		csum = csum & 0xffffffff
 		count = count + 2
@@ -105,10 +110,15 @@ def sendOnePing(mySocket, destAddr, ID):
 	#NOTE END LOGAN'S ADDITION END#NOTE
 
 	# Calculate the checksum on the data and the dummy header.
-	myChecksum = checksum(str(header + data))
+	myChecksum = checksum(header + data)
 
 	#NOTE BEGIN LOGAN'S ADDITION END#NOTE
-	myChecksum = htons(myChecksum)
+	# Get the right checksum, and put in the header
+	if sys.platform == 'darwin':
+		# Convert 16-bit integers from host to network byte order
+		myChecksum = htons(myChecksum) & 0xffff
+	else:
+		myChecksum = htons(myChecksum)
 	
 
 	header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, 1)
@@ -134,7 +144,8 @@ def doOnePing(destAddr, timeout):
 def ping(
 	host	:	str	=	"127.0.0.1", 
 	num_pings:	int	=	10000,
-	timeout	:	float	=	1
+	timeout	:	float	=	1,
+	sleep	:	float	=	1
 ):
 	# timeout=1 means: If one second goes by without a reply from the server,
 	# the client assumes that either the client's ping or the server's pong is lost
@@ -154,9 +165,10 @@ def ping(
 	for i in range(num_pings):
 		rtt, delay = doOnePing(dest, timeout)
 		ping_tally+=1
-		collected_rtt.append(rtt)
+		if(rtt != None):
+			collected_rtt.append(rtt)
 		print(delay)
-		time.sleep(0.5)  # one second
+		time.sleep(sleep)  # one second
 
 	#cannot collect sufficient data with less than 2 pings. output nothing
 	if(ping_tally < 2):
@@ -185,12 +197,61 @@ def ping(
 #attempting to make this script executable from CL
 if __name__ == "__main__":
 
+	#set some default values for the pinger kwargs
 	ping_kwargs = {
-		'host'		:	"8.8.8.8",
-		'timeout'	:	3,
-		'num_pings'	:	10
+		'host'		:	"127.0.0.1",
+		'timeout'	:	1,
+		'num_pings'	:	5,
+		'sleep'		:	1
 	}
 
-ping(**ping_kwargs)
+	#mapping flags to desired kwargs and casting types
+	flag_map = {
+		'-h'	:	{'arg':'host',		'type':str},
+		'-t'	:	{'arg':'timeout',	'type':float},
+		'-n'	:	{'arg':'num_pings',	'type':int},
+		'-s'	:	{'arg':'sleep',		'type':float}
+	}
+
+	#helpful output upon arg errors that shows flag and format hints
+	syntax_err_out = ValueError(
+		f"\n\nArgument count is not allowed in its provided format.\n"
+		f"\nPlease use the format as follows:\n\tFlags:\n\t\t-h\thost (IP or Name)"
+		f"\n\t\t-t\ttimeout\n\t\t-n\tnumber of pings\n\t\t-s\tsleep timer (between pings)\n"
+		f"\nPlease follow each flag with the desired value.\n"
+	)
+
+	#if command line arguments were received
+	if(len(sys.argv)>1):
+		
+		#if only one argument was received, interpret as a host
+		if(len(sys.argv) == 2):
+
+			#sys.argv comes in as string, can immediately assign
+			ping_kwargs['host'] = sys.argv[1]
+
+		#more than one argument was recieved
+		else:
+
+			#can only be interpreted as flag value pairs, 
+			#therefore ensure arg shaping
+			if(len(sys.argv)%2==0):
+				raise syntax_err_out
+
+			#this is reached if more than one argument is submitted
+			#now flags are needed for interpretation
+			for arg in range(int((len(sys.argv)-1)/2)):
+
+				#for each pair of flags and values
+				try:
+					#nothing prettier than a one-liner.
+					#ASSIGN       from this flag          the kwarg =     CAST      this flag type       to value after flag
+					ping_kwargs[flag_map[sys.argv[1+arg*2]]['arg']] = flag_map[sys.argv[1+arg*2]]['type'](sys.argv[2+arg*2])
+
+				except Exception as e:
+					raise syntax_err_out
+
+	#all arguments from here are fully interpreted and functional, can execute.
+	ping(**ping_kwargs)
 
 #NOTE END LOGAN'S ADDITION END#NOTE
