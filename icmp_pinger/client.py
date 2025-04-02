@@ -1,9 +1,14 @@
 '''
-Program 1 - Pinger assignment - COSC370
-Logan Kelsch - 3/9/2025 - 3/17/2025
+Program 1 - Pinger assignment
+COSC370
+Logan Kelsch
+3/9/2025 - 3/17/2025
 The skeleton of this file was NOT coded by me. The skeleton of this file was derived from
 the student resource section of this book, under 'Python 3 Socket Programming Assignment'.
-A '#NOTE BEGIN/END LOGAN'S ADDITION END#NOTE' is added at the program at my added locations.
+
+IMPORTANT:
+A '#NOTE BEGIN/END LOGAN'S ADDITION END#NOTE' is added 
+into the program at all locations where I added onto the initial file.
 '''
 
 from socket import *
@@ -17,7 +22,7 @@ ICMP_ECHO_REQUEST = 8
 
 def checksum(string):
 
-	if( isinstance(string, str)):
+	if(isinstance(string, str)):
 		string.encode()
 
 	csum = 0
@@ -95,8 +100,10 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
 			return rtt, "Request timed out when receiving."
 		
 		#NOTE BEGIN LOGAN'S ADDITION END#NOTE
-		# Return message containing rtt
+
+		#return the original message, as well as the raw RTT data
 		return rtt, f"Reply from {destAddr}: time={rtt}ms"
+	
 		#NOTE END LOGAN'S ADDITION END#NOTE
 
 def sendOnePing(mySocket, destAddr, ID):
@@ -104,15 +111,16 @@ def sendOnePing(mySocket, destAddr, ID):
 	myChecksum = 0
 
 	#NOTE BEGIN LOGAN'S ADDITION END#NOTE
-	# struct -- Interpret strings as packed binary data
+
+	#struct - interpret strings as packed binary data
 	header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, 1)
 	data = struct.pack("d", time.time())
+
 	#NOTE END LOGAN'S ADDITION END#NOTE
 
 	# Calculate the checksum on the data and the dummy header.
 	myChecksum = checksum(header + data)
-
-	#NOTE BEGIN LOGAN'S ADDITION END#NOTE
+	
 	# Get the right checksum, and put in the header
 	if sys.platform == 'darwin':
 		# Convert 16-bit integers from host to network byte order
@@ -120,10 +128,17 @@ def sendOnePing(mySocket, destAddr, ID):
 	else:
 		myChecksum = htons(myChecksum)
 	
+	#NOTE BEGIN LOGAN'S ADDITION END#NOTE
 
+	#pack header information with bbHHh format
 	header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, 1)
+	
+	#combine data into packet variable
 	packet = header + data
+	
+	#send packet
 	mySocket.sendto(packet, (destAddr, 1))  # AF_INET address must be tuple, not str
+
 	#NOTE END LOGAN'S ADDITION END#NOTE
 
 def doOnePing(destAddr, timeout):
@@ -135,10 +150,16 @@ def doOnePing(destAddr, timeout):
 	sendOnePing(mySocket, destAddr, myID)
 
 	#NOTE BEGIN LOGAN'S ADDITION END#NOTE
+
+	#collect returns from receive function, INCLUDING raw RTT
 	rtt, delay = receiveOnePing(mySocket, myID, timeout, destAddr)
 
 	mySocket.close()
+	
+	#then return both values received from receiver function
+	#after closing the socket
 	return rtt, delay
+
 	#NOTE END LOGAN'S ADDITION END#NOTE
 
 def ping(
@@ -163,11 +184,17 @@ def ping(
 
 	# Send ping requests to a server separated by approximately one second
 	for i in range(num_pings):
+
+		#collect raw RTT and delay string from one ping function
 		rtt, delay = doOnePing(dest, timeout)
+		#tally up for pings complete
 		ping_tally+=1
+		#ensure raw RTT is interpretable, jitter stays logical if not appended.
 		if(rtt != None):
 			collected_rtt.append(rtt)
+		#show original delay string to user
 		print(delay)
+		#sleep for desired time
 		time.sleep(sleep)  # one second
 
 	#cannot collect sufficient data with less than 2 pings. output nothing
@@ -177,9 +204,10 @@ def ping(
 	#collect jitter information
 	tot_jit = 0
 	for i in range(1, len(collected_rtt)):
-		#collect differences in each rtt
+		#collect differences in each RTT
 		tot_jit+=abs(collected_rtt[i-1]-collected_rtt[i])
 
+	#output all calucated datapoints
 	print(f"\nAVG RTT: {round(sum(collected_rtt)/len(collected_rtt), 4)} ms")
 	print(f"TOT RTT: {round(sum(collected_rtt), 4)} ms ({len(collected_rtt)} RTTs)")
 	print(f"MAX RTT: {round(max(collected_rtt), 4)} ms")
@@ -190,6 +218,7 @@ def ping(
 	#NOTE END LOGAN'S ADDITION END#NOTE
 
 	return delay
+
 
 #NOTE BEGIN LOGAN'S ADDITION END#NOTE
 
@@ -221,10 +250,12 @@ if __name__ == "__main__":
 		f"\nPlease follow each flag with the desired value.\n"
 	)
 
+	#NOTE begin argument dissector
+
 	#if command line arguments were received
 	if(len(sys.argv)>1):
 		
-		#if only one argument was received, interpret as a host
+		#if only one argument was received, interpret as host variable
 		if(len(sys.argv) == 2):
 
 			#sys.argv comes in as string, can immediately assign
@@ -233,21 +264,23 @@ if __name__ == "__main__":
 		#more than one argument was recieved
 		else:
 
-			#can only be interpreted as flag value pairs, 
+			#can only be interpreted as flag-value pairs, 
 			#therefore ensure arg shaping
 			if(len(sys.argv)%2==0):
 				raise syntax_err_out
 
-			#this is reached if more than one argument is submitted
-			#now flags are needed for interpretation
+			#for each flag-value pair, interpret said pair
 			for arg in range(int((len(sys.argv)-1)/2)):
 
-				#for each pair of flags and values
+				#using a try except statement for easy code condensing
+				#take given flag and assign respective value as respective datatype
 				try:
 					#nothing prettier than a one-liner.
 					#ASSIGN       from this flag          the kwarg =     CAST      this flag type       to value after flag
 					ping_kwargs[flag_map[sys.argv[1+arg*2]]['arg']] = flag_map[sys.argv[1+arg*2]]['type'](sys.argv[2+arg*2])
 
+				#this could arrise from illegal flag or illegal value
+				#either of which, this output will suffice.
 				except Exception as e:
 					raise syntax_err_out
 
